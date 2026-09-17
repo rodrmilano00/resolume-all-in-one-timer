@@ -11,8 +11,8 @@ enum ParamType : FFUInt32
 
 static CFFGLPluginInfo PluginInfo(
 	PluginFactory< FFGLEventTimer >,  // Create method
-	"RS04",                           // Plugin unique ID
-	"Event Timer",                    // Plugin name
+	"AIOT",                           // Plugin unique ID
+	"All In One Timer",               // Plugin name
 	2,                                // API major version number
 	1,                                // API minor version number
 	1,                                // Plugin major version number
@@ -61,7 +61,7 @@ FFGLEventTimer::FFGLEventTimer() :
 	SetParamInfof( PT_BLUE, "Blue", FF_TYPE_BLUE );
 	SetParamInfof( PT_ALPHA, "Alpha", FF_TYPE_ALPHA );
 
-	FFGLLog::LogToHost( "Created Event Timer" );
+	FFGLLog::LogToHost( "Created All In One Timer" );
 }
 
 FFResult FFGLEventTimer::InitGL( const FFGLViewportStruct* vp )
