@@ -148,7 +148,7 @@
       <AdditionalDependencies>OpenGL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y /I "$(TargetPath)" "C:\Users\luis1\Documents\Resolume Arena\Extra Effects\"</Command>
+      <Command>xcopy /Y /I "$(TargetPath)" "C:\Users\luis1\OneDrive\Documentos\Resolume Arena\Extra Effects\"</Command>
       <Message>Copying EventTimer.dll to Resolume plugins folder</Message>
     </PostBuildEvent>
   </ItemDefinitionGroup>
@@ -173,7 +173,7 @@
       <AdditionalDependencies>OpenGL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y /I "$(TargetPath)" "C:\Users\luis1\Documents\Resolume Arena\Extra Effects\"</Command>
+      <Command>xcopy /Y /I "$(TargetPath)" "C:\Users\luis1\OneDrive\Documentos\Resolume Arena\Extra Effects\"</Command>
       <Message>Copying EventTimer.dll to Resolume plugins folder</Message>
     </PostBuildEvent>
   </ItemDefinitionGroup>
