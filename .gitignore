@@ -1,0 +1,17 @@
+# Build artifacts
+ffgl/binaries/
+ffgl/build/windows/x64/
+
+# Visual Studio intermediate/temp files
+*.pdb
+*.exp
+*.lib
+*.tlog
+*.idb
+*.obj
+*.ilk
+*.cache
+
+# OS files
+Thumbs.db
+.DS_Store
