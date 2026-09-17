@@ -16,4 +16,4 @@ Fireworks				OFPX
 Gradients               RS01
 Particles Example       RS02
 CustomThumbnail         RS03
-EventTimer              RS04
+EventTimer              AIOT
