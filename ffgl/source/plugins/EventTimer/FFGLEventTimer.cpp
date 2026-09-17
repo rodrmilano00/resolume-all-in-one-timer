@@ -6,27 +6,8 @@
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
-#include <fstream>
-#include <cstdarg>
 
 using namespace ffglex;
-
-// Debug logging
-static void DebugLog( const char* format, ... )
-{
-	static FILE* logFile = nullptr;
-	if( !logFile )
-		fopen_s( &logFile, "C:\\Users\\luis1\\CascadeProjects\\resolume-all-in-one-timer\\debug.log", "a" );
-	if( logFile )
-	{
-		va_list args;
-		va_start( args, format );
-		vfprintf( logFile, format, args );
-		va_end( args );
-		fprintf( logFile, "\n" );
-		fflush( logFile );
-	}
-}
 
 static CFFGLPluginInfo PluginInfo(
 	PluginFactory< FFGLEventTimer >,

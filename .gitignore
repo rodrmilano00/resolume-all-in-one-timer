@@ -11,7 +11,18 @@ ffgl/build/windows/x64/
 *.obj
 *.ilk
 *.cache
+*.ipdb
+*.iobj
+
+# VS user files
+*.vcxproj.user
+*.suo
+.vs/
 
 # OS files
 Thumbs.db
 .DS_Store
+
+# Debug logs
+debug.log
+*.log
