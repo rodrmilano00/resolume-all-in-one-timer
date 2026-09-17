@@ -239,6 +239,62 @@ The plugin carefully manages OpenGL state to avoid conflicts with Resolume's ren
 
 ---
 
+## Releases
+
+### For Users - How to Install from a Release
+
+1. Go to the [Releases](../../releases) page
+2. Download `EventTimer.dll` from the latest release
+3. Copy the file to your Resolume Extra Effects folder:
+   ```
+   C:\Users\<your-user>\Documents\Resolume Arena\Extra Effects\
+   ```
+4. Restart Resolume Arena
+5. Find **All In One Timer** in the Sources list
+
+### For Maintainers - How to Create a Release
+
+1. **Build the plugin in Release mode** (see [Build from source](#option-b-build-from-source))
+2. **Verify the DLL works** in Resolume Arena
+3. **Create a GitHub release**:
+   - Go to the repo's **Releases** page on GitHub
+   - Click **Draft a new release**
+   - **Tag version**: Use semantic versioning (e.g., `v1.0.0`)
+   - **Release title**: e.g., `All In One Timer v1.0.0`
+   - **Description**: List changes, new features, and bug fixes
+   - **Attach the DLL**: Drag `EventTimer.dll` from `ffgl\binaries\x64\Release\`
+   - Click **Publish release**
+
+#### What Each Release Should Include
+
+| Asset | Description |
+|-------|-------------|
+| `EventTimer.dll` | The compiled plugin (Release x64 build) |
+
+#### Release Description Template
+
+```markdown
+## All In One Timer vX.X.X
+
+### Features
+- Feature 1
+- Feature 2
+
+### Bug Fixes
+- Fix 1
+
+### Installation
+1. Download `EventTimer.dll`
+2. Copy to `Documents\Resolume Arena\Extra Effects\`
+3. Restart Resolume Arena
+
+### Requirements
+- Resolume Arena 7.3.0+
+- Windows 10/11 x64
+```
+
+---
+
 ## Acknowledgments
 
 - [Resolume](https://resolume.com/) for the FFGL 2.1 SDK
