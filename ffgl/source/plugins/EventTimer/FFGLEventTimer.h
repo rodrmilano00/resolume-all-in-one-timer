@@ -23,7 +23,9 @@ private:
 		PT_RESET,          // FF_TYPE_EVENT
 		PT_FORMAT,         // FF_TYPE_OPTION - 0=mm:ss, 1=hh:mm:ss
 		PT_MODE,           // FF_TYPE_OPTION - 0=count up, 1=countdown
-		PT_COUNTDOWN_TIME, // FF_TYPE_STANDARD
+		PT_CD_HOURS,       // FF_TYPE_STANDARD - countdown hours (0-23)
+		PT_CD_MINUTES,     // FF_TYPE_STANDARD - countdown minutes (0-59)
+		PT_CD_SECONDS,     // FF_TYPE_STANDARD - countdown seconds (0-59)
 		PT_HUE,            // FF_TYPE_HUE - text color
 		PT_SATURATION,     // FF_TYPE_SATURATION
 		PT_BRIGHTNESS,     // FF_TYPE_BRIGHTNESS
@@ -60,7 +62,9 @@ private:
 	// Timer params
 	float paramFormat = 0.0f;
 	float paramMode   = 0.0f;
-	float paramCountdownTime = 60.0f;
+	float paramCdHours   = 0.0f;
+	float paramCdMinutes = 1.0f;
+	float paramCdSeconds = 0.0f;
 
 	// Font
 	float paramFontIndex = 0.0f;

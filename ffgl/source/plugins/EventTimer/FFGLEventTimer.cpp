@@ -6,8 +6,27 @@
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
+#include <fstream>
+#include <cstdarg>
 
 using namespace ffglex;
+
+// Debug logging
+static void DebugLog( const char* format, ... )
+{
+	static FILE* logFile = nullptr;
+	if( !logFile )
+		fopen_s( &logFile, "C:\\Users\\luis1\\CascadeProjects\\resolume-all-in-one-timer\\debug.log", "a" );
+	if( logFile )
+	{
+		va_list args;
+		va_start( args, format );
+		vfprintf( logFile, format, args );
+		va_end( args );
+		fprintf( logFile, "\n" );
+		fflush( logFile );
+	}
+}
 
 static CFFGLPluginInfo PluginInfo(
 	PluginFactory< FFGLEventTimer >,
@@ -113,9 +132,13 @@ FFGLEventTimer::FFGLEventTimer() :
 	SetParamElementInfo( PT_MODE, 0, "Count Up", 0.0f );
 	SetParamElementInfo( PT_MODE, 1, "Countdown", 1.0f );
 
-	// Countdown time
-	SetParamInfo( PT_COUNTDOWN_TIME, "Countdown", FF_TYPE_STANDARD, 60.0f / 3600.0f );
-	SetParamRange( PT_COUNTDOWN_TIME, 0.0f, 1.0f );
+	// Countdown time - separate hours/minutes/seconds for intuitive setting
+	SetParamInfo( PT_CD_HOURS, "CD Hours", FF_TYPE_STANDARD, 0.0f );
+	SetParamRange( PT_CD_HOURS, 0.0f, 23.0f );
+	SetParamInfo( PT_CD_MINUTES, "CD Minutes", FF_TYPE_STANDARD, 1.0f );
+	SetParamRange( PT_CD_MINUTES, 0.0f, 59.0f );
+	SetParamInfo( PT_CD_SECONDS, "CD Seconds", FF_TYPE_STANDARD, 0.0f );
+	SetParamRange( PT_CD_SECONDS, 0.0f, 59.0f );
 
 	// Text color (HSB - native Resolume color picker)
 	SetParamInfo( PT_HUE, "Hue", FF_TYPE_HUE, 0.33f );
@@ -180,7 +203,9 @@ FFGLEventTimer::FFGLEventTimer() :
 	SetParamGroup( PT_RESET, "Timer Controls" );
 	SetParamGroup( PT_FORMAT, "Timer Controls" );
 	SetParamGroup( PT_MODE, "Timer Controls" );
-	SetParamGroup( PT_COUNTDOWN_TIME, "Timer Controls" );
+	SetParamGroup( PT_CD_HOURS, "Timer Controls" );
+	SetParamGroup( PT_CD_MINUTES, "Timer Controls" );
+	SetParamGroup( PT_CD_SECONDS, "Timer Controls" );
 	SetParamGroup( PT_HUE, "Text Color" );
 	SetParamGroup( PT_SATURATION, "Text Color" );
 	SetParamGroup( PT_BRIGHTNESS, "Text Color" );
@@ -265,8 +290,11 @@ std::string FFGLEventTimer::GetSelectedFontName()
 
 void FFGLEventTimer::RenderTextToTexture( const std::string& text )
 {
-	const int fontSize = 140;
+	const int fontSize = 400; // High resolution for crisp text
 	std::string fontName = GetSelectedFontName();
+
+	// Ensure we bind on texture unit 0
+	glActiveTexture( GL_TEXTURE0 );
 
 	HDC hdc = CreateCompatibleDC( NULL );
 
@@ -284,8 +312,8 @@ void FFGLEventTimer::RenderTextToTexture( const std::string& text )
 	DrawTextA( hdc, text.c_str(), -1, &rcMeasure, DT_CALCRECT | DT_SINGLELINE );
 
 	// Add padding to avoid cut-off
-	int padX = 20;
-	int padY = 10;
+	int padX = 40;
+	int padY = 20;
 	int texW = rcMeasure.right + padX * 2;
 	int texH = rcMeasure.bottom + padY * 2;
 
@@ -347,10 +375,12 @@ void FFGLEventTimer::RenderTextToTexture( const std::string& text )
 
 std::string FFGLEventTimer::GetTimeString()
 {
+	double countdownTotal = (double)paramCdHours * 3600.0 + (double)paramCdMinutes * 60.0 + (double)paramCdSeconds;
+
 	double displayTime;
 	if( paramMode > 0.5f )
 	{
-		displayTime = paramCountdownTime - m_elapsedSeconds;
+		displayTime = countdownTotal - m_elapsedSeconds;
 		if( displayTime < 0.0 ) displayTime = 0.0;
 	}
 	else
@@ -395,19 +425,71 @@ void FFGLEventTimer::HSBtoRGB( float h, float s, float b, float& r, float& g, fl
 
 FFResult FFGLEventTimer::ProcessOpenGL( ProcessOpenGLStruct* pGL )
 {
+	// Clean up ALL OpenGL state that previous plugins may have left bound.
+	// The FFGL SDK validates context state BEFORE calling ProcessOpenGL (line 355 in FFGL.cpp),
+	// so if the previous plugin (e.g. Resolume text source) left textures/shaders bound,
+	// the assertion will fire before our cleanup code at the end can run.
+	// We must clean everything at the START to ensure the pre-validation passes.
+
+	// Unbind any shader program left by previous plugin
+	glUseProgram( 0 );
+
+	// Unbind any VAO left by previous plugin
+	glBindVertexArray( 0 );
+
+	// Unbind any buffers left by previous plugin
+	glBindBuffer( GL_ARRAY_BUFFER, 0 );
+	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
+
+	// Unbind ALL texture types on ALL texture units
+	GLint maxTexUnits;
+	glGetIntegerv( GL_MAX_TEXTURE_IMAGE_UNITS, &maxTexUnits );
+
+	static const GLenum texTypes[] = {
+		GL_TEXTURE_1D, GL_TEXTURE_2D, GL_TEXTURE_3D,
+		GL_TEXTURE_1D_ARRAY, GL_TEXTURE_2D_ARRAY,
+		GL_TEXTURE_RECTANGLE, GL_TEXTURE_CUBE_MAP,
+		GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_BUFFER,
+		GL_TEXTURE_2D_MULTISAMPLE, GL_TEXTURE_2D_MULTISAMPLE_ARRAY
+	};
+
+	for( GLint i = 0; i < maxTexUnits; i++ )
+	{
+		glActiveTexture( GL_TEXTURE0 + i );
+		for( size_t t = 0; t < sizeof(texTypes)/sizeof(texTypes[0]); t++ )
+		{
+			glBindTexture( texTypes[t], 0 );
+		}
+	}
+	glActiveTexture( GL_TEXTURE0 );
+
+	// Restore blend state to defaults
+	glDisable( GL_BLEND );
+	glBlendFunc( GL_ONE, GL_ZERO );
+
 	// Update timer
 	auto now = std::chrono::steady_clock::now();
-	if( m_running )
+	double delta = std::chrono::duration<double>( now - m_lastTime ).count();
+
+	// If delta is too large, the plugin was not being rendered (layer removed from program).
+	// Reset m_lastTime without advancing the timer, effectively pausing while inactive.
+	if( delta > 0.5 )
 	{
-		double delta = std::chrono::duration<double>( now - m_lastTime ).count();
+		m_lastTime = now;
+		delta = 0.0;
+	}
+
+	if( m_running && delta > 0.0 )
+	{
 		m_elapsedSeconds += delta;
 
 		if( paramMode > 0.5f )
 		{
-			double remaining = paramCountdownTime - m_elapsedSeconds;
+			double countdownTotal = (double)paramCdHours * 3600.0 + (double)paramCdMinutes * 60.0 + (double)paramCdSeconds;
+			double remaining = countdownTotal - m_elapsedSeconds;
 			if( remaining <= 0.0 )
 			{
-				m_elapsedSeconds = paramCountdownTime;
+				m_elapsedSeconds = countdownTotal;
 				m_running = false;
 			}
 		}
@@ -465,7 +547,15 @@ FFResult FFGLEventTimer::ProcessOpenGL( ProcessOpenGLStruct* pGL )
 	glBindVertexArray( 0 );
 
 	// Unbind everything to satisfy FFGL SDK state validation
-	glBindTexture( GL_TEXTURE_2D, 0 );
+	for( GLint i = 0; i < maxTexUnits; i++ )
+	{
+		glActiveTexture( GL_TEXTURE0 + i );
+		for( size_t t = 0; t < sizeof(texTypes)/sizeof(texTypes[0]); t++ )
+		{
+			glBindTexture( texTypes[t], 0 );
+		}
+	}
+	glActiveTexture( GL_TEXTURE0 );
 	glBindBuffer( GL_ARRAY_BUFFER, 0 );
 	glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, 0 );
 
@@ -528,8 +618,14 @@ FFResult FFGLEventTimer::SetFloatParameter( unsigned int dwIndex, float value )
 		case PT_MODE:
 			paramMode = value;
 			break;
-		case PT_COUNTDOWN_TIME:
-			paramCountdownTime = value * 3600.0f;
+		case PT_CD_HOURS:
+			paramCdHours = value;
+			break;
+		case PT_CD_MINUTES:
+			paramCdMinutes = value;
+			break;
+		case PT_CD_SECONDS:
+			paramCdSeconds = value;
 			break;
 		case PT_HUE:
 			paramHue = value;
@@ -581,7 +677,9 @@ float FFGLEventTimer::GetFloatParameter( unsigned int index )
 	{
 		case PT_FORMAT:         return paramFormat;
 		case PT_MODE:           return paramMode;
-		case PT_COUNTDOWN_TIME: return paramCountdownTime / 3600.0f;
+		case PT_CD_HOURS:       return paramCdHours;
+		case PT_CD_MINUTES:     return paramCdMinutes;
+		case PT_CD_SECONDS:     return paramCdSeconds;
 		case PT_HUE:            return paramHue;
 		case PT_SATURATION:     return paramSaturation;
 		case PT_BRIGHTNESS:     return paramBrightness;
