@@ -69,6 +69,25 @@ void main()
 }
 )";
 
+// Callback for enumerating installed fonts
+static std::vector<std::string>* g_fontList = nullptr;
+static int CALLBACK EnumFontProc( const LOGFONTA* lpelfe, const TEXTMETRICA* lpntme, DWORD fontType, LPARAM lParam )
+{
+	if( g_fontList && lpelfe )
+	{
+		std::string name( lpelfe->lfFaceName );
+		// Avoid duplicates (Windows enumerates each font per charset)
+		bool found = false;
+		for( const auto& f : *g_fontList )
+		{
+			if( f == name ) { found = true; break; }
+		}
+		if( !found )
+			g_fontList->push_back( name );
+	}
+	return 1; // continue enumeration
+}
+
 FFGLEventTimer::FFGLEventTimer() :
 	vao( 0 ), vbo( 0 ), ibo( 0 ),
 	textTexture( 0 ), textureWidth( 0 ), textureHeight( 0 ),
@@ -110,8 +129,44 @@ FFGLEventTimer::FFGLEventTimer() :
 	SetParamInfo( PT_XPOS, "X Position", FF_TYPE_XPOS, 0.5f );
 	SetParamInfo( PT_YPOS, "Y Position", FF_TYPE_YPOS, 0.5f );
 
-	// Font name (text parameter)
-	SetParamInfo( PT_FONT_NAME, "Font Name", FF_TYPE_TEXT, "Arial" );
+	// Enumerate installed fonts and create dropdown
+	HDC hdc = GetDC( NULL );
+	g_fontList = &m_fontNames;
+	LOGFONTA lf = {};
+	lf.lfCharSet = DEFAULT_CHARSET;
+	EnumFontFamiliesExA( hdc, &lf, EnumFontProc, 0, 0 );
+	ReleaseDC( NULL, hdc );
+	g_fontList = nullptr;
+
+	// Sort fonts alphabetically
+	std::sort( m_fontNames.begin(), m_fontNames.end() );
+
+	// Find default font index (Arial)
+	int defaultFontIdx = 0;
+	for( size_t i = 0; i < m_fontNames.size(); i++ )
+	{
+		if( m_fontNames[i] == "Arial" ) { defaultFontIdx = (int)i; break; }
+	}
+
+	int numFonts = (int)m_fontNames.size();
+	if( numFonts > 0 )
+	{
+		SetOptionParamInfo( PT_FONT_NAME, "Font", numFonts, (float)defaultFontIdx );
+		for( int i = 0; i < numFonts; i++ )
+		{
+			// Truncate to 16 chars for FFGL spec
+			char truncated[17];
+			strncpy_s( truncated, sizeof( truncated ), m_fontNames[i].c_str(), _TRUNCATE );
+			SetParamElementInfo( PT_FONT_NAME, i, truncated, (float)i );
+		}
+	}
+	else
+	{
+		// Fallback if no fonts found
+		SetOptionParamInfo( PT_FONT_NAME, "Font", 1, 0.0f );
+		SetParamElementInfo( PT_FONT_NAME, 0, "Arial", 0.0f );
+		m_fontNames.push_back( "Arial" );
+	}
 
 	// Background
 	SetParamInfo( PT_SHOW_BG, "Show BG", FF_TYPE_BOOLEAN, false );
@@ -139,8 +194,6 @@ FFGLEventTimer::FFGLEventTimer() :
 	SetParamGroup( PT_BG_SATURATION, "Background" );
 	SetParamGroup( PT_BG_BRIGHTNESS, "Background" );
 	SetParamGroup( PT_BG_ALPHA, "Background" );
-
-	memset( m_textBuffer, 0, sizeof( m_textBuffer ) );
 }
 
 FFResult FFGLEventTimer::InitGL( const FFGLViewportStruct* vp )
@@ -157,11 +210,12 @@ FFResult FFGLEventTimer::InitGL( const FFGLViewportStruct* vp )
 		float x, y, u, v;
 	};
 
+	// V=0 at top, V=1 at bottom to match top-down DIB (fixes upside-down text)
 	Vertex vertices[4] = {
-		{ -1.0f, -1.0f, 0.0f, 0.0f },
-		{  1.0f, -1.0f, 1.0f, 0.0f },
-		{  1.0f,  1.0f, 1.0f, 1.0f },
-		{ -1.0f,  1.0f, 0.0f, 1.0f }
+		{ -1.0f, -1.0f, 0.0f, 1.0f },
+		{  1.0f, -1.0f, 1.0f, 1.0f },
+		{  1.0f,  1.0f, 1.0f, 0.0f },
+		{ -1.0f,  1.0f, 0.0f, 0.0f }
 	};
 	unsigned short indices[6] = { 0, 1, 2, 0, 2, 3 };
 
@@ -200,16 +254,50 @@ FFResult FFGLEventTimer::InitGL( const FFGLViewportStruct* vp )
 	return CFFGLPlugin::InitGL( vp );
 }
 
+std::string FFGLEventTimer::GetSelectedFontName()
+{
+	int idx = (int)( paramFontIndex + 0.5f );
+	if( idx < 0 ) idx = 0;
+	if( idx >= (int)m_fontNames.size() ) idx = (int)m_fontNames.size() - 1;
+	if( m_fontNames.empty() ) return "Arial";
+	return m_fontNames[idx];
+}
+
 void FFGLEventTimer::RenderTextToTexture( const std::string& text )
 {
-	const int texW = 1024;
-	const int texH = 256;
+	const int fontSize = 140;
+	std::string fontName = GetSelectedFontName();
 
 	HDC hdc = CreateCompatibleDC( NULL );
+
+	// Create font to measure text
+	HFONT hFont = CreateFontA(
+		fontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+		DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS,
+		CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
+		fontName.c_str()
+	);
+	HFONT hOldFont = (HFONT)SelectObject( hdc, hFont );
+
+	// Measure text size
+	RECT rcMeasure = { 0, 0, 0, 0 };
+	DrawTextA( hdc, text.c_str(), -1, &rcMeasure, DT_CALCRECT | DT_SINGLELINE );
+
+	// Add padding to avoid cut-off
+	int padX = 20;
+	int padY = 10;
+	int texW = rcMeasure.right + padX * 2;
+	int texH = rcMeasure.bottom + padY * 2;
+
+	// Round up to power of 2 for better GPU compatibility
+	// (not strictly required for modern GPUs but good practice)
+	if( texW < 64 ) texW = 64;
+	if( texH < 64 ) texH = 64;
+
 	BITMAPINFO bi = {};
 	bi.bmiHeader.biSize = sizeof( BITMAPINFOHEADER );
 	bi.bmiHeader.biWidth = texW;
-	bi.bmiHeader.biHeight = -texH;
+	bi.bmiHeader.biHeight = -texH; // top-down DIB
 	bi.bmiHeader.biPlanes = 1;
 	bi.bmiHeader.biBitCount = 32;
 	bi.bmiHeader.biCompression = BI_RGB;
@@ -219,22 +307,13 @@ void FFGLEventTimer::RenderTextToTexture( const std::string& text )
 	HBITMAP hOldBmp = (HBITMAP)SelectObject( hdc, hBmp );
 
 	// Clear to transparent black
-	memset( bits, 0, texW * texH * 4 );
-
-	// Create font
-	HFONT hFont = CreateFontA(
-		140, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-		DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS,
-		CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
-		paramFontName.c_str()
-	);
-	HFONT hOldFont = (HFONT)SelectObject( hdc, hFont );
+	memset( bits, 0, (size_t)texW * texH * 4 );
 
 	SetTextColor( hdc, RGB( 255, 255, 255 ) );
 	SetBkMode( hdc, TRANSPARENT );
-	SetTextAlign( hdc, TA_CENTER | TA_BASELINE );
 
-	RECT rc = { 0, 0, texW, texH };
+	// Draw text centered in the texture
+	RECT rc = { padX, padY, texW - padX, texH - padY };
 	DrawTextA( hdc, text.c_str(), -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE );
 
 	// Fix alpha channel: set alpha = brightness of each pixel
@@ -242,7 +321,7 @@ void FFGLEventTimer::RenderTextToTexture( const std::string& text )
 	for( int i = 0; i < texW * texH; i++ )
 	{
 		int idx = i * 4;
-		// DIB is BGRA, alpha = average of B,G,R
+		// DIB is BGRA, alpha = max of B,G,R (text is white so all channels are equal)
 		pixels[idx + 3] = (unsigned char)( ( pixels[idx] + pixels[idx + 1] + pixels[idx + 2] ) / 3 );
 	}
 
@@ -467,6 +546,10 @@ FFResult FFGLEventTimer::SetFloatParameter( unsigned int dwIndex, float value )
 		case PT_SIZE:
 			paramSize = value;
 			break;
+		case PT_FONT_NAME:
+			paramFontIndex = value;
+			m_fontChanged = true;
+			break;
 		case PT_XPOS:
 			paramXPos = value;
 			break;
@@ -504,6 +587,7 @@ float FFGLEventTimer::GetFloatParameter( unsigned int index )
 		case PT_BRIGHTNESS:     return paramBrightness;
 		case PT_ALPHA:          return paramAlpha;
 		case PT_SIZE:           return paramSize;
+		case PT_FONT_NAME:     return paramFontIndex;
 		case PT_XPOS:           return paramXPos;
 		case PT_YPOS:           return paramYPos;
 		case PT_SHOW_BG:        return paramShowBg ? 1.0f : 0.0f;
@@ -515,22 +599,3 @@ float FFGLEventTimer::GetFloatParameter( unsigned int index )
 	return 0.0f;
 }
 
-FFResult FFGLEventTimer::SetTextParameter( unsigned int index, const char* value )
-{
-	if( index == PT_FONT_NAME && value != nullptr )
-	{
-		paramFontName = value;
-		m_fontChanged = true;
-	}
-	return FF_SUCCESS;
-}
-
-char* FFGLEventTimer::GetTextParameter( unsigned int index )
-{
-	if( index == PT_FONT_NAME )
-	{
-		strncpy_s( m_textBuffer, sizeof( m_textBuffer ), paramFontName.c_str(), _TRUNCATE );
-		return m_textBuffer;
-	}
-	return nullptr;
-}

@@ -2,6 +2,7 @@
 #include <FFGLSDK.h>
 #include <chrono>
 #include <string>
+#include <vector>
 
 class FFGLEventTimer : public CFFGLPlugin
 {
@@ -14,8 +15,6 @@ public:
 
 	FFResult SetFloatParameter( unsigned int dwIndex, float value ) override;
 	float GetFloatParameter( unsigned int index ) override;
-	FFResult SetTextParameter( unsigned int index, const char* value ) override;
-	char* GetTextParameter( unsigned int index ) override;
 
 private:
 	enum ParamType : FFUInt32
@@ -32,7 +31,7 @@ private:
 		PT_SIZE,           // FF_TYPE_STANDARD
 		PT_XPOS,           // FF_TYPE_XPOS
 		PT_YPOS,           // FF_TYPE_YPOS
-		PT_FONT_NAME,      // FF_TYPE_TEXT - font name
+		PT_FONT_NAME,      // FF_TYPE_OPTION - dropdown of installed fonts
 		PT_SHOW_BG,        // FF_TYPE_BOOLEAN
 		PT_BG_HUE,         // FF_TYPE_HUE - background color
 		PT_BG_SATURATION,  // FF_TYPE_SATURATION
@@ -64,7 +63,8 @@ private:
 	float paramCountdownTime = 60.0f;
 
 	// Font
-	std::string paramFontName = "Arial";
+	float paramFontIndex = 0.0f;
+	std::vector<std::string> m_fontNames;
 
 	// Timer state
 	bool m_running = false;
@@ -88,10 +88,8 @@ private:
 	GLint uTexAspectLocation;
 	GLint uTextureLocation;
 
-	// Text buffer for GetTextParameter
-	char m_textBuffer[256];
-
 	void RenderTextToTexture( const std::string& text );
 	void HSBtoRGB( float h, float s, float b, float& r, float& g, float& bl );
 	std::string GetTimeString();
+	std::string GetSelectedFontName();
 };
